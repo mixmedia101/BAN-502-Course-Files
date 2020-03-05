@@ -1,0 +1,119 @@
+---
+output:
+  word_document: default
+  html_document: default
+---
+#   Module 6 - Assignment 1
+##  Jordan Roberts
+### Clustering
+
+```{r include=FALSE}
+library(tidyverse)
+library(cluster)
+library(factoextra)
+library(dendextend)
+
+trucks = read.csv("trucks.csv")
+summary(trucks)
+```
+
+```{r}
+ggplot(trucks, aes(Distance, Speeding))+
+  geom_point()
+```
+
+There do appear to be natural clusters between distances of 0-100 and 100-250. Speeding could be used to cluster the first and second groups further.  
+
+```{r}
+trucks2 = trucks %>% select("Distance", "Speeding")
+trucks2 = as.data.frame(scale(trucks2))
+
+summary(trucks2)
+```
+
+```{r}
+set.seed(1234)
+trucks_cluster = kmeans(trucks2, 2)
+fviz_cluster(trucks_cluster, trucks2)
+```
+
+This isn't quite what I would have expected as the two clusters, but it does make sense. There is a high concentration in the lower cluster that deserves its own group, but I bet we could get a better set of clusters.  
+
+```{r}
+#minimize
+set.seed(123)
+fviz_nbclust(trucks2, kmeans, method = "wss")
+```
+
+The "elbow" of this method appears to be at 4 clusters. I would agree with this, as it should create a high- and low-distance pair, as well as a high- and low-speed pair.  
+
+```{r}
+#maximize
+set.seed(123)
+fviz_nbclust(trucks2, kmeans, method = "silhouette")
+```
+
+This method also gives us 4, so that is how many clusters we'll aim for.  
+
+```{r}
+set.seed(1234)
+trucks_cluster = kmeans(trucks2, 4)
+fviz_cluster(trucks_cluster, trucks2)
+```
+
+This clustering doesn't do what I'd expected! It splits the high-distance, low-speed concentration, while still maintaining the large chunk at the top. The clusters do appear distinct, however. It will be interesting to see how these clusters function as representations of the whole.  
+
+```{r}
+wine = read.csv("wineprice.csv")
+summary(wine)
+```
+
+```{r}
+wine2 = wine %>% select(-c("Year","FrancePop"))
+wine2 = as.data.frame(scale(wine2))
+
+summary(wine2)
+```
+
+```{r}
+#minimize
+set.seed(123)
+fviz_nbclust(wine2, kmeans, method = "wss")
+```
+
+```{r}
+#maximize
+set.seed(123)
+fviz_nbclust(wine2, kmeans, method = "silhouette")
+```
+
+The minimization method gives 5 or 6 as the optimal number of clusters, while the maximization method states 5 explicitly. We can go with 5 here.  
+
+```{r}
+set.seed(1234)
+trucks_cluster = kmeans(wine2, 5)
+fviz_cluster(trucks_cluster, wine2)
+```
+
+```{r}
+m = c("average", "single", "complete", "ward")
+names(m) = c("average", "single", "complete", "ward")
+
+ac = function(x) {
+  agnes(wine2, method = x)$ac
+}
+map_dbl(m, ac)
+```
+
+Ward's gives us the highest coefficient, so we'll go with that!  
+
+```{r}
+hc = agnes(wine2, method = "ward")
+pltree(hc, cex = 0.6, hang = -1, main = "Agglomerative Dendrogram") 
+```
+
+```{r}
+hc2 = diana(wine2)
+pltree(hc2, cex = 0.6, hang = -1, main = "Divisive Dendogram")
+```
+

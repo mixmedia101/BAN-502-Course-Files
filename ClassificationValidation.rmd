@@ -1,0 +1,222 @@
+---
+output:
+  word_document: default
+  html_document: default
+---
+#   Module 3 - Assignment 2
+##  Jordan Roberts
+### BAN 502
+
+```{r}
+library(tidyverse)
+library(MASS)
+library(caret)
+library(ROCR)
+
+parole = read.csv("parole.csv")
+
+str(parole)
+```
+
+```{r}
+parole = parole %>%
+  mutate(male = as_factor(as.character(male))) %>%
+  mutate(male = fct_recode(male, 
+                           "Female" = "0",
+                           "Male" = "1")) %>%
+  mutate(race = as_factor(as.character(race))) %>%
+  mutate(race = fct_recode(race, 
+                           "White" = "1",
+                           "Non-White" = "2")) %>%
+  mutate(state = as_factor(as.character(state))) %>%
+  mutate(state = fct_recode(state, 
+                            "Other" = "1",
+                            "Kentucky" = "2",
+                            "Louisiana" = "3",
+                            "Virginia" = "4")) %>%
+  mutate(crime = as_factor(as.character(crime))) %>%
+  mutate(crime = fct_recode(crime, 
+                           "Other" = "1",
+                           "Larceny" = "2",
+                           "Drug-Related" = "3",
+                           "Driving-Related" = "4")) %>%
+  mutate(multiple.offenses = as_factor(as.character(multiple.offenses))) %>%
+  mutate(multiple.offenses = fct_recode(multiple.offenses, 
+                                        "No" = "0",
+                                        "Yes" = "1")) %>%
+  mutate(violator = as_factor(as.character(violator))) %>%
+  mutate(violator = fct_recode(violator, 
+                               "Not Violated" = "0",
+                               "Violated" = "1"))
+
+str(parole)
+```
+
+```{r}
+parole_train = createDataPartition(y = parole$violator, p=0.7, list=FALSE)
+train = parole[parole_train,]
+test = parole[-parole_train,]
+set.seed(12345)
+```
+
+```{r}
+ggplot(train, aes(male, fill=violator)) +
+  geom_bar(position="fill")
+```
+
+Sex doesn't seem to affect violation by much, though females do have a higher rate. It doesn't seem significant, however.  
+
+```{r}
+ggplot(train, aes(race, fill=violator)) +
+  geom_bar(position="fill")
+```
+
+Non-white violators seem quite a bit more common than white violators (close to 150% at least). This appears significant.  
+
+```{r}
+ggplot(train, aes(violator, age)) +
+  geom_boxplot()
+```
+
+Not much of a difference here. The age ranges are pretty similar.  
+
+```{r}
+ggplot(train, aes(state, fill=violator)) +
+  geom_bar()
+
+t1 = table(train$violator, train$state)
+prop.table(t1, margin = 2)
+```
+
+Looking at our proportion table, Louisiana's offenders are about a 60-40 split. The other states don't seem to have a significant trend, though. This could be a good predictor.
+
+```{r}
+ggplot(train, aes(violator, time.served)) +
+  geom_boxplot()
+```
+
+Time served is similar between the two groups, with non-violators tending to have served slightly more time. Nothing jumps out at me.  
+
+```{r}
+ggplot(train, aes(violator, max.sentence)) +
+  geom_boxplot()
+```
+
+Max sentence seems quite different between violators and non-violators. A higher sentence seems indicative of a lower violation rate. Violators hover around 12-12.5 years. This could be a significant factor.  
+
+```{r}
+ggplot(train, aes(multiple.offenses, fill=violator)) +
+  geom_bar(position="fill")
+```
+
+The two groups differ here, as well. Those with multiple offenses tend to violate their paroles, which makes sense. Having multiple offenses is indicative of general disregard for the law, so not violating parole may not be high on your priority list.  
+
+```{r}
+ggplot(train, aes(crime, fill=violator)) +
+  geom_bar()
+
+t2 = table(train$violator, train$crime)
+prop.table(t2, margin = 2)
+```
+
+Looking at our table, we see driving-related offenses appear most often for non-violators, while the other crimes are in similar areas to each other. Not particularly significant overall.  
+
+```{r}
+mod1 = glm(violator ~ race, train, family = "binomial")
+summary(mod1)
+```
+
+Not being white seems to be a big predictor of violation tendencies, as we guessed from our plot earlier.  
+
+```{r}
+allmod = glm(violator ~., train, family = "binomial")
+summary(allmod)
+
+emptymod = glm(violator ~ 1, train, family = "binomial")
+summary(emptymod)
+```
+
+```{r}
+forwardmod = stepAIC(emptymod, direction = "forward", scope = list(upper=allmod, lower=emptymod), trace = TRUE)
+summary(forwardmod)
+```
+
+Both forward and backward stepwise models (I only included the forward stepwise here) arrived at the same model. State, race, and multiple.offenses all seem to be the biggest predictors, which isn't surprising. The AIC of 258 is a bit lower than the model simply using race as the predictor. It seems like a fairly accurate model.  
+
+```{r}
+Parolee1 = data.frame(state = "Louisiana", multiple.offenses = "Yes", race = "White")
+predict(forwardmod, Parolee1, type = "response")
+
+Parolee2 = data.frame(state = "Kentucky", multiple.offenses = "No", race = "Non-White")
+predict(forwardmod, Parolee2, type = "response")
+```
+
+Parolee 1 has a ~34% chance of being a parole violator based on their given information, while Parolee 2 has about a 21% chance.  
+
+```{r}
+predictions = predict(forwardmod, type = "response")
+head(predictions)
+
+ROCRpred = prediction(predictions, train$violator)
+
+ROCRperf = performance(ROCRpred, "tpr", "fpr")
+plot(ROCRperf, colorize = TRUE, print.cutoffs.at = seq(0, 1, by = 0.1), text.adj = c(-0.2,1.7))
+```
+
+```{r}
+opt.cut = function(perf, pred){
+  cut.ind = mapply(FUN=function(x, y, p){
+    d = (x - 0)^2 + (y - 1)^2
+    ind = which(d == min(d))
+    c(sensitivity = y[[ind]], specificity = 1 - x[[ind]],
+      cutoff = p[[ind]])
+  }, perf@x.values, perf@y.values, pred@cutoffs)
+}
+print(opt.cut(ROCRperf, ROCRpred))
+```
+
+
+```{r}
+t3 = table(train$violator, predictions > 0.2069629)
+t3
+
+(t3[1,1] + t3[2,2]) / nrow(train)
+```
+
+The sensitivity of the model is .73, specificity is .86, and accuracy is .84 or 84%. This is a fairly accurate model, but there are risks involved with any inaccuracy in this situation. Someone who is put on parole who is deemed unlikely to violate, but then does, creates a threat to society at large. Especially in the case of violent crimes, just one person slipping through the cracks can end up getting someone hurt or killed. Accuracy is important, but may not be the best metric for this particular application. Similarly, someone who is deserving of parole but is denied it erroneously also is a net loss for society, as their positive contributions will go unfulfilled.  
+
+```{r}
+t3 = table(train$violator, predictions > 0.5)
+t3
+
+(t3[1,1] + t3[2,2]) / nrow(train)
+```
+
+```{r}
+t3 = table(train$violator, predictions > 0.55)
+t3
+
+(t3[1,1] + t3[2,2]) / nrow(train)
+```
+
+```{r}
+t3 = table(train$violator, predictions > 0.34)
+t3
+
+(t3[1,1] + t3[2,2]) / nrow(train)
+```
+
+A threshold above .34 yields a max of about 90% accuracy. Increasing the threshold doesn't seem to change the model's accuracy in any meaningful way.  
+
+```{r}
+emptymod = glm(violator ~ 1, test, family = "binomial")
+forwardmod = stepAIC(emptymod, direction = "forward", scope = list(upper=allmod, lower=emptymod), trace = FALSE)
+predictions = predict(forwardmod, type = "response")
+
+t3 = table(test$violator, predictions > .34)
+t3
+
+(t3[1,1] + t3[2,2]) / nrow(test)
+```
+
+The test model has an accuracy of 91%, about 2% off from the training model. The two are close enough for the model to be considered appropriate.

@@ -1,0 +1,153 @@
+---
+output:
+  word_document: default
+  html_document: default
+---
+#   Module 4 - Assignment 2
+##  Jordan Roberts
+### Classification Trees
+
+```{r include=FALSE}
+library(RColorBrewer)
+library(tidyverse)
+library(caret)
+library(rpart)
+library(rattle)
+```
+
+```{r}
+parole = read.csv("parole.csv")
+
+str(parole)
+```
+
+```{r}
+parole = parole %>%
+  mutate(male = as_factor(as.character(male))) %>%
+  mutate(male = fct_recode(male, 
+                           "Female" = "0",
+                           "Male" = "1")) %>%
+  mutate(race = as_factor(as.character(race))) %>%
+  mutate(race = fct_recode(race, 
+                           "White" = "1",
+                           "Non-White" = "2")) %>%
+  mutate(state = as_factor(as.character(state))) %>%
+  mutate(state = fct_recode(state, 
+                            "Other" = "1",
+                            "Kentucky" = "2",
+                            "Louisiana" = "3",
+                            "Virginia" = "4")) %>%
+  mutate(crime = as_factor(as.character(crime))) %>%
+  mutate(crime = fct_recode(crime, 
+                           "Other" = "1",
+                           "Larceny" = "2",
+                           "Drug-Related" = "3",
+                           "Driving-Related" = "4")) %>%
+  mutate(multiple.offenses = as_factor(as.character(multiple.offenses))) %>%
+  mutate(multiple.offenses = fct_recode(multiple.offenses, 
+                                        "No" = "0",
+                                        "Yes" = "1")) %>%
+  mutate(violator = as_factor(as.character(violator))) %>%
+  mutate(violator = fct_recode(violator, 
+                               "Not Violated" = "0",
+                               "Violated" = "1"))
+
+str(parole)
+```
+
+```{r}
+set.seed(12345)
+parole_train = createDataPartition(y = parole$violator, p=0.7, list=FALSE)
+train = parole[parole_train,]
+test = parole[-parole_train,]
+```
+
+```{r}
+tree1 = rpart(violator ~., train, method="class")
+fancyRpartPlot(tree1)
+```
+
+Let's predict where we would place a 40-year-old from Louisiana who has served a 5-year sentence. At the top branch, we go right ("No" to the three states listed). We'll assume they are non-white and move to the right again. The time served (5 years) is greater than the given value of 3.9, so we move right a final time to find that they are predicted to violate their parole.  
+
+```{r}
+printcp(tree1)
+```
+
+Our standard tree gave us eight splits. This actually increased our xerror value instead of decreasing it. A cp value of 0.03 seems to remove most of the risk of overfitting.  
+
+```{r}
+tree2 = prune(tree1, cp = 0.03)
+printcp(tree2)
+summary(tree2)
+```
+
+"Not Violated" is the majority class. Given no other information, our model will predict that a new entry will not violate his or her parole.  
+
+```{r}
+trainpred = predict(tree1, train, type="class")
+head(trainpred)
+```
+
+```{r}
+confusionMatrix(trainpred, train$violator, positive = "Violated")
+```
+
+We see an accuracy of about 90% in our training set. Our P-Value isn't significant, but our dataset is relatively small so it's ok. We'll test the test set next.  
+
+```{r}
+testpred = predict(tree1, test, type="class")
+confusionMatrix(testpred, test$violator, positive = "Violated")
+```
+
+Our test set is a little lower, but still close to 90% as with our training set. The sensitivity is also lower, but specificity is almost the same. This is a fairly strong model.  
+
+```{r}
+blood = read.csv("Blood.csv")
+str(blood)
+```
+
+```{r}
+blood = blood %>%
+  mutate(DonatedMarch = as_factor(as.character(DonatedMarch))) %>%
+  mutate(DonatedMarch = fct_recode(DonatedMarch, 
+                           "No" = "0",
+                           "Yes" = "1"))
+
+str(blood)
+```
+
+```{r}
+set.seed(1234)
+blood_train = createDataPartition(y = blood$DonatedMarch, p=0.7, list=FALSE)
+train2 = blood[blood_train,]
+test2 = blood[-blood_train,]
+
+tree3 = rpart(DonatedMarch ~., train2, method="class")
+fancyRpartPlot(tree3)
+```
+
+```{r}
+printcp(tree3)
+plotcp(tree3)
+```
+
+A cp value of around 0.016 looks to be a better choice for our tree, so we can try rounding to 0.02 and see what happens.  
+
+```{r}
+tree4 = prune(tree3, cp = 0.02)
+printcp(tree4)
+```
+
+This gives us the same result, so we can consider it valid for our purposes. This gives us three splits total, compared to the original eight.  
+
+```{r}
+trainpred2 = predict(tree4, train2, type="class")
+confusionMatrix(trainpred2, train2$DonatedMarch, positive = "Yes")
+```
+
+```{r}
+testpred2 = predict(tree4, test2, type="class")
+confusionMatrix(testpred2, test2$DonatedMarch, positive = "Yes")
+```
+
+Our training model seems fine, but our test model is actually worse! Our accuracy drops from 76% with a naive model to 75%. This model's not great for making predictions.

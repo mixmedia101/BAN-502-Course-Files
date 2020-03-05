@@ -1,0 +1,119 @@
+---
+output:
+  word_document: default
+  html_document: default
+---
+#   Project Phase 1
+##  Jordan Roberts
+### BAN 502
+
+```{r}
+library(tidyverse)
+library(lubridate)
+```
+```{r}
+chicago = read.csv("chicago.csv")
+```
+
+```{r}
+chicago = chicago %>%
+  drop_na() %>%
+  select(-c("ID", "Case.Number", "Updated.On", "X.Coordinate", "Y.Coordinate", "Location.Description")) %>%
+  mutate(Date = mdy_hms(Date)) %>%
+  mutate(Hour = hour(Date), Day = day(Date), Month = month(Date))
+
+chicago = chicago %>% mutate(Arrest = as.factor(Arrest)) %>%
+                      mutate(Arrest = fct_recode(Arrest, "No" = "false", "Yes" = "true")) %>%
+          mutate(Domestic = as.factor(Domestic)) %>%
+          mutate(Domestic = fct_recode(Domestic, "No" = "false", "Yes" = "true")) %>%
+          mutate(Beat = as.factor(Beat)) %>%
+          mutate(District = as.factor(District)) %>%
+          mutate(Ward = as.factor(Ward)) %>%
+          mutate(Community.Area = as_factor(as.character(Community.Area))) %>%
+          mutate(Year = as.factor(Year)) %>%
+          mutate(Hour = as.factor(Hour)) %>%
+          mutate(Day = as.factor(Day)) %>%
+          mutate(Month = as.factor(Month))
+summary(chicago)
+str(chicago)
+```
+
+```{r}
+colors = c("33", "154")
+ggplot(chicago, aes(Hour, fill=Arrest))+
+  geom_bar()+
+  scale_fill_manual(values = colors)+
+  labs(y="Crimes", title="Crimes Committed by Hour")
+
+#ggplot(chicago, aes(Hour, fill=Arrest))+
+#  geom_bar(position="fill")+
+#  scale_fill_manual(values = colors) #GOOD!
+```
+
+```{r}
+ggplot(chicago, aes(Month, fill=Arrest))+
+  geom_bar()+
+  scale_fill_manual(values = colors)+
+  labs(y="Crimes",title="Crimes Committed by Month")
+
+#ggplot(chicago, aes(Month, fill=Arrest))+
+#  geom_bar(position="fill")+
+#  scale_fill_manual(values = colors) #NOT AS GOOD, BUT INTERESTING
+```
+
+```{r}
+ggplot(chicago, aes(District, fill=Arrest))+
+  geom_bar()+
+  scale_fill_manual(values = colors)+
+  labs(y="Crimes", title="Crimes Committed by District")+
+  theme(legend.position = "none")
+
+ggplot(chicago, aes(District, fill=Arrest))+
+  geom_bar(position="fill")+
+  scale_fill_manual(values = colors)+ #INTERESTING
+  labs(y="Percent",title="Ratio of Arrests to Crimes Committed")
+```
+
+```{r}
+#ggplot(chicago, aes(FBI.Code, fill=Arrest))+
+#  geom_bar()+
+#  scale_fill_manual(values = colors)
+
+lvls2 <- names(sort(tapply(chicago$Arrest == "Yes", chicago$FBI.Code, mean)))
+ggplot(chicago, aes(factor(FBI.Code, levels = lvls2), fill = Arrest)) +
+  geom_bar(position = "fill") +
+  scale_fill_manual(values = colors)+
+  coord_flip()+
+  labs(y="Percentage", x="FBI Crime Code", title="Arrest Rate by FBI Crime Classification")
+
+#ggplot(chicago, aes(FBI.Code, fill=Arrest))+
+#  geom_bar(position="fill")+
+#  scale_fill_manual(values = colors) #INTERESTING FOR SPECIFIC CRIME STATS
+```
+
+```{r}
+lvls <- names(sort(tapply(chicago$Arrest == "Yes", chicago$Primary.Type, mean)))
+ggplot(chicago, aes(factor(Primary.Type, levels = lvls), fill = Arrest)) +
+  geom_bar(position = "fill") +
+  scale_fill_manual(values = colors)+
+  coord_flip()+
+  labs(x="Offense", y="Percent", title="Arrest Rate by Offense - IUCR")
+```
+
+```{r}
+beatz = chicago %>%
+  filter(Beat %in% c("1834","112","1831","111","1112","421","511","122","1011","1833","624","423","1533","621","1132","2533","1133","623","123","631")) %>%
+  select(Beat, Arrest) %>%
+  group_by(Beat, Arrest) %>%
+  summarize(Crimes = n())
+
+beatz
+
+lvls2 <- names(sort(tapply(beatz$Arrest == "Yes", beatz$Beat, mean)))
+ggplot(beatz, aes(factor(Beat, levels = lvls2), Crimes, fill = Arrest))+
+  geom_bar(stat="identity", position="fill")+
+  coord_flip()+
+  scale_fill_manual(values = colors)+
+  labs(x="Beat", y="Percentage", title="Beats with Highest Crime Rates")
+```
+

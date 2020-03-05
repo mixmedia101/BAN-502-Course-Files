@@ -1,0 +1,59 @@
+---
+output:
+  word_document: default
+  html_document: default
+---
+#   Module 4 - Assignment 1
+##  Jordan Roberts
+### Missing Data
+
+```{r include=FALSE}
+library(tidyverse)
+library(mice)
+library(VIM)
+```
+
+```{r}
+grades = read.csv("class-grades.csv")
+
+str(grades)
+summary(grades)
+```
+
+The missing data is as follows: Tutorial is missing 1 field, Midterm and TakeHome both are missing 3, and Final is missing 4. Eleven fields are missing altogether.  
+
+```{r}
+vim_plot = aggr(grades, numbers=TRUE, prop = c(TRUE, FALSE), cex.axis=.7)
+```
+
+There is one row that is missing multiple fields (Midterm and TakeHome). Overall, we are missing a very small percentage of our data. Still, this must be dealt with before we can actually use our analysis tools.  
+
+```{r}
+rowless = grades %>% drop_na()
+
+summary(rowless)
+```
+
+Our row-wise deletion process creates a new data frame with 89 rows, ten fewer than the original data frame. One of the rows must have had multiple NA entries. Next, we'll use column-wise deletion and see the results.  
+
+```{r}
+columnless = grades %>% select(-c(Tutorial, Midterm, TakeHome, Final))
+
+summary(columnless)
+```
+
+We've completely deleted four columns in our dataset, leaving only Prefix and Assignment. Seeing as we were trying to predict grades based off the Final column, this method has made our analysis impossible. Of the two options, row-wise deletion seems much more suited for our analysis. However, since we have only 11 fields missing data, we can try imputation to fill in the blanks with fake data.  
+
+```{r}
+grades_imp = mice(grades, m=1, method = "pmm", seed = 12345)
+
+summary(grades_imp)
+densityplot(grades_imp)
+
+grades_complete = complete(grades_imp)
+summary(grades_complete)
+```
+
+The new data has a similar shape, though it varies a bit in either direction. However, our dataset is small, so the results will likely be noticeably different from a few small changes.  
+
+It is important to be careful when imputing data. If many fields are missing, imputing the data is basically just creating an entirely new dataset, negating the original and real data given. Also, when using means to create the fake data, outliers must be noted so that it isn't skewed far from the rest of the data. Also, the relevance of the missing data is important; if an entire column offers little in the way of analysis, it's less work and more useful to just remove the column entirely.

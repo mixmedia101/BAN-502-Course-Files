@@ -1,0 +1,208 @@
+---
+output:
+  word_document: default
+  html_document: default
+---
+#   Module 5 - Assignment 1
+##  Jordan Roberts
+### Parameter Selection, Neural Networks, and Ensembles
+```{r include=FALSE}
+library(tidyverse)
+library(caret)
+library(nnet)
+library(rpart)
+library(caretEnsemble)
+library(ranger)
+```
+
+```{r}
+parole = read.csv("parole.csv")
+
+parole = parole %>%
+  mutate(male = as_factor(as.character(male))) %>%
+  mutate(male = fct_recode(male, 
+                           "Female" = "0",
+                           "Male" = "1")) %>%
+  mutate(race = as_factor(as.character(race))) %>%
+  mutate(race = fct_recode(race, 
+                           "White" = "1",
+                           "Non-White" = "2")) %>%
+  mutate(state = as_factor(as.character(state))) %>%
+  mutate(state = fct_recode(state, 
+                            "Other" = "1",
+                            "Kentucky" = "2",
+                            "Louisiana" = "3",
+                            "Virginia" = "4")) %>%
+  mutate(crime = as_factor(as.character(crime))) %>%
+  mutate(crime = fct_recode(crime, 
+                           "Other" = "1",
+                           "Larceny" = "2",
+                           "Drug-Related" = "3",
+                           "Driving-Related" = "4")) %>%
+  mutate(multiple.offenses = as_factor(as.character(multiple.offenses))) %>%
+  mutate(multiple.offenses = fct_recode(multiple.offenses, 
+                                        "No" = "0",
+                                        "Yes" = "1")) %>%
+  mutate(violator = as_factor(as.character(violator))) %>%
+  mutate(violator = fct_recode(violator, 
+                               "Not.Violated" = "0",
+                               "Violated" = "1"))
+
+str(parole)
+```
+
+```{r}
+set.seed(12345)
+parole_train = createDataPartition(y = parole$violator, p=0.7, list=FALSE)
+train = parole[parole_train,]
+test = parole[-parole_train,]
+```
+
+```{r}
+fitControl = trainControl(method = "cv", 
+                           number = 10)
+
+nnetGrid = expand.grid(size = 12, decay = 0.1)
+
+set.seed(1234)
+nnetBasic = train(x=as.data.frame(parole[,-9]), y=as.matrix(parole$violator),
+                 method = "nnet",
+                 tuneGrid = nnetGrid,
+                 trControl = fitControl,
+                 trace = FALSE)
+```
+
+```{r}
+nnetBasic
+```
+
+```{r}
+predNetBasic = predict(nnetBasic, train)
+
+confusionMatrix(predNetBasic, train$violator, positive = "Violated")
+```
+
+Our model has an accuracy of about 95%, which is pretty good. The P-Value is significant and the model appears to be sufficient for our needs (with the training set, at least).  
+
+```{r}
+fitControl = trainControl(method = "cv", 
+                           number = 10)
+
+nnetGrid =  expand.grid(size = seq(from = 1, to = 12, by = 1),
+                        decay = seq(from = 0.1, to = 0.5, by = 0.1))
+
+set.seed(1234)
+nnetBasic2 = train(x=as.data.frame(parole[,-9]), y=as.matrix(parole$violator),
+                 method = "nnet",
+                 tuneGrid = nnetGrid,
+                 trControl = fitControl,
+                 trace = FALSE)
+```
+
+```{r}
+nnetBasic2
+
+predNetBasic2 = predict(nnetBasic2, train)
+
+confusionMatrix(predNetBasic2, train$violator, positive = "Violated")
+```
+
+Our accuracy dropped almost 4 points with the second model. Not a lot, but noticeable. It's still above 90%, however, which is still good. We should see how it stands up with the test set.  
+
+```{r}
+predNetBasic = predict(nnetBasic, test)
+
+confusionMatrix(predNetBasic, test$violator, positive = "Violated")
+```
+
+```{r}
+predNetBasic2 = predict(nnetBasic2, test)
+
+confusionMatrix(predNetBasic2, test$violator, positive = "Violated")
+```
+
+Both models see a dip in accuracy when applied to the test set, but not by much. Both are still above 90%, which is quite good. This degradation should be normal and doesn't specifically indicate overfitting in this case.  
+
+```{r}
+control = trainControl(
+  method = "cv",
+  number = 5,
+  savePredictions = "final",
+  classProbs = TRUE,
+  summaryFunction = twoClassSummary
+  )
+
+set.seed(111)
+model_list = caretList(
+  x=as.data.frame(train[,-9]), y=as.matrix(train$violator),
+  metric = "ROC",
+  trControl = control,
+  methodList = "glm",
+  tuneList = list(
+  rf = caretModelSpec(method="ranger", tuneLength=6),
+  rpart = caretModelSpec(method="rpart", tuneLength=6),
+  nn = caretModelSpec(method="nnet", tuneLength=6, trace=FALSE)))
+```
+
+```{r}
+modelCor(resamples(model_list))
+```
+
+The rpart model is somewhat correlated with rf and nn, but none of them are particularly strong.  
+
+```{r}
+set.seed(111)
+ensemble = caretEnsemble(
+  model_list, 
+  metric="ROC",
+  trControl=trainControl(
+    method = "cv",
+    number= 5,
+    summaryFunction=twoClassSummary,
+    classProbs=TRUE
+    ))
+
+summary(ensemble)
+```
+
+The resulting ROC for our ensemble is 0.8222. This is only better than the rpart model, meaning we might be better off using one of the models exclusively.  
+
+```{r}
+ensemblepred = predict(ensemble, train)
+
+confusionMatrix(ensemblepred, train$violator, positive = "Violated")
+
+ensemblepredtest = predict(ensemble, test)
+
+confusionMatrix(ensemblepredtest, test$violator, positive = "Violated")
+```
+
+Our training set is quite accurate, but the test set drops about 7 points in accuracy and is only slightly better than a naive model. This ensemble model isn't great.  
+
+```{r}
+set.seed(111)
+stack = caretStack(
+  model_list,
+  method ="glm",
+  metric ="ROC",
+  trControl = trainControl(
+    method = "cv",
+    number = 5,
+    savePredictions = "final",
+    classProbs = TRUE,
+    summaryFunction = twoClassSummary
+  )
+)
+
+print(stack)
+
+stackpred = predict(stack, train)
+
+confusionMatrix(stackpred, train$violator, positive = "Violated")
+
+stackpredtest = predict(stack, test)
+
+confusionMatrix(stackpredtest, test$violator, positive = "Violated")
+```
+
+Stacked, this model is about the same, if not worse. The ROC is lower than the first ensemble model, but they're largely the same.

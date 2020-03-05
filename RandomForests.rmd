@@ -1,0 +1,76 @@
+---
+output:
+  word_document: default
+  html_document: default
+---
+#   Module 4 - Assignment 3
+##  Jordan Roberts
+### Random Forests
+
+```{r include=FALSE}
+library(tidyverse)
+library(caret)
+library(ranger)
+```
+
+```{r}
+blood = read.csv("Blood.csv")
+
+blood = blood %>%
+  mutate(DonatedMarch = as_factor(as.character(DonatedMarch))) %>%
+  mutate(DonatedMarch = fct_recode(DonatedMarch, 
+                           "No" = "0",
+                           "Yes" = "1"))
+
+str(blood)
+```
+
+```{r}
+set.seed(1234)
+blood_train = createDataPartition(blood$DonatedMarch, p = 0.7, list = FALSE)
+train = blood[blood_train,]
+test = blood[-blood_train,]
+```
+
+```{r}
+fit_control = trainControl(method = "cv",
+                           number = 10)
+
+set.seed(123)
+rf_fit = train(x=as.matrix(train[,-5]), y=as.matrix(train$DonatedMarch),
+               method = "ranger",
+               importance = "permutation",
+               trControl = fit_control,
+               num.trees = 100)
+```
+
+```{r}
+varImp(rf_fit)
+rf_fit
+```
+
+TotalDonations is the most important variable, followed by Mnths_Since_First, Total_Donated, and Mnths_Since_Last. This makes sense, as someone with many donations is likely a frequenter of the donation services, meaning their chances of donating sometime in March would be higher.  
+
+```{r}
+bloodpred = predict(rf_fit)
+head(bloodpred)
+```
+
+```{r}
+confusionMatrix(bloodpred, train$DonatedMarch, positive = "Yes")
+```
+
+We've got an accuracy of ~90% with this training model, a vast improvement over the naive model's 76%. The P-Value is highly significant. Sensitivity is low (0.616), but specificity is almost at maximum (0.993). Let's hope our test set does as well:  
+
+```{r}
+bloodtestpred = predict(rf_fit, newdata = test)
+head(bloodtestpred)
+```
+
+```{r}
+confusionMatrix(bloodtestpred, test$DonatedMarch, positive = "Yes")
+```
+
+The test set did not do as well. The naive model trumps our test accuracy by almost 0.02. This model is not particularly reliable.  
+
+As the response variable in question does not seem to be a matter of life or death, the poor test model results may not serious consequences if implemented. Still, it doesn't seem useful for predicting whether a person donated in March, so I would not recommend the model. There is likely a better model that can be made to get the results desired.

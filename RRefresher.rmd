@@ -1,0 +1,69 @@
+---
+output:
+  word_document: default
+  html_document: default
+---
+#   Jordan Roberts
+##  Module 1: Assignment 3
+### R and RStudio Refresher
+
+```{r}
+#install.packages("tidyverse")
+library("tidyverse")
+
+diamonddata = diamonds
+head(diamonddata)
+```
+
+The dataset has 53940 rows and 10 columns.  
+
+```{r}
+ggplot(diamonddata, aes(carat, price))+
+  geom_point()
+```
+
+As carat increases, its price does the same (overall). Higher carats demand a higher price, with a carat of 1 seemingly exploding in price compared to a lesser carat.  
+
+```{r}
+ggplot(diamonddata, aes(carat, price, color = cut))+
+  geom_point()
+```
+
+Ideal cuts appear to fetch a higher price than lesser cuts. Premium also appears more frequently at higher prices. The highest carats have very poor cuts, likely due to rarity. As expected, fair cuts seem to fetch a low price quite often.  
+
+```{r}
+ggplot(diamonddata, aes(carat, price, color = color))+
+  geom_point()
+```
+
+The highest carats appear to be of color J. Also, higher carats seem to move along the spectrum from D to J as they increase. However, all colors have rather high prices at different points in the graph, suggesting that color doesn't affect price nearly as much as carat.  
+
+```{r}
+inventory <- read.csv("InventoryData.csv")
+
+head(inventory)
+summary(inventory)
+```
+
+The data frame "inventory" has 13561 rows and 6 columns.  
+
+```{r}
+inventoryA <- inventory %>%
+  filter(Supplier == "A")
+```
+
+inventoryA has 3695 rows, little more than 25% of the original data frame.  
+
+```{r}
+inventoryA = mutate(inventoryA, OnHandRatio = `On.Hand` / `Annual.Demand`)
+```
+
+This chunk of code adds a new column to the data frame, showing the ratio of On-Hand supply to Annual Demand as noted in the data.  
+
+```{r}
+avg_cost <- inventory %>%
+  group_by(`Item.SKU`) %>%
+  summarize("SKUAvgCost" = mean(`Cost.per.Unit....`))
+```
+
+I find the memorization of commands and functions to be the most difficult part of using R, as with any programming language. Luckily, Google is helpful enough to assist me when I struggle to remember how to perform a certain function. The RStudio application is quite nice, and after having a bit of practice with it, it feels natural using it.

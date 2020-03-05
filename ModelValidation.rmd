@@ -1,0 +1,89 @@
+---
+output:
+  word_document: default
+  html_document: default
+---
+#   Module 3 - Assignment 1
+##  Jordan Roberts
+### BAN 502
+
+```{r, include=FALSE}
+library(tidyverse)
+library(MASS)
+library(caret)
+
+bike = read.csv("hour.csv")
+```
+
+```{r}
+bike = bike %>% mutate(season = as_factor(as.character(season))) %>%
+  mutate(season = fct_recode(season,
+                             "Spring" = "1",
+                             "Summer" = "2",
+                             "Fall" = "3",
+                             "Winter" = "4")) %>%
+  mutate(yr = as_factor(as.character(yr)), mnth = as_factor(as.character(mnth)), hr = as_factor(as.character(hr))) %>%
+  mutate(holiday = as_factor(as.character(holiday))) %>%
+  mutate(holiday = fct_recode(holiday,
+                              "NotHoliday" = "0",
+                              "Holiday" = "1")) %>%
+  mutate(workingday = as_factor(as.character(workingday))) %>%
+  mutate(workingday = fct_recode(workingday,
+                                 "NotWorkingDay" = "0",
+                                 "WorkingDay" = "1")) %>%
+  mutate(weathersit = as_factor(as.character(weathersit))) %>%
+  mutate(weathersit = fct_recode(weathersit,
+                                 "NoPrecip" = "1",
+                                 "Misty" = "2",
+                                 "LightPrecip" = "3",
+                                 "HeavyPrecip" = "4")) %>%
+  mutate(weekday = as_factor(as.character(weekday))) %>%
+  mutate(weekday = fct_recode(weekday,
+                              "Sunday" = "0",
+                              "Monday" = "1",
+                              "Tuesday" = "2",
+                              "Wednesday" = "3",
+                              "Thursday" = "4",
+                              "Friday" = "5",
+                              "Saturday" = "6"))
+```
+
+```{r}
+train.rows = createDataPartition(y=bike$count, p=0.7, list=FALSE)
+train = bike[train.rows,]
+test = bike[-train.rows,]
+set.seed(1234)
+```
+
+The training set has 12168 rows (~70% of 17379) while the test set has 5211 (~30%).  
+
+```{r}
+train.mod = lm(count ~ season+mnth+hr+holiday+weekday+temp+weathersit, train)
+summary(train.mod)
+```
+
+The training model has an R-squared value of .62, fairly high and indicative of a good possibility of some linear fit.  
+
+```{r}
+train.predict = predict(train.mod)
+head(train.predict)
+```
+
+With an intercept of -82.2, we'd expect values around the ones seen here. Note that 1 is missing from this set; we would expect to find 1 in the 30% test set that we'll find next.  
+
+```{r}
+test.predict = predict(train.mod, newdata=test)
+head(test.predict)
+```
+
+Just like with the training predictions, these predictions are close to what we would expect. We found prediction 1 here, as well.  
+
+```{r}
+SSE = sum((test$count - test.predict)^2)
+SST = sum((test$count - mean(test$count))^2)
+1 - SSE/SST
+```
+
+Our original training R-squared value was 0.62, and our test sample returned a very close value. This indicates that our original model was a good fit.  
+
+With this model, we've split the data at random into two groups, one containing 70% and the other containing 30% of the bike data frame. If we were to use k-fold cross-validation, we would be splitting the data into several groups or "folds" and testing combinations of them. For example, with 5 folds, we would have 4 folds make up the training set while the 5th is the test set. Then, we would do it again with a different fold as the test set and the remainders as the new training set. This would continue until we have analyzed each combination. This gives us a more thorough analysis of model performance.

@@ -1,0 +1,73 @@
+---
+output:
+  word_document: default
+  html_document: default
+---
+#   Module 2 - Assignment 1
+##  Jordan Roberts
+### BAN 502  
+
+```{r, include=FALSE}
+library(GGally)
+library(tidyverse)
+library(car)
+library(lmtest)
+```
+
+```{r, include=FALSE}
+air = airquality
+summary(air)
+```
+
+The "air" dataset has 6 variables and 153 observations. Ozone appears to be missing a few entries, along with Solar.R. Solar.R is likely to be the response variable, but Ozone is quite volatile itself.  
+```{r, results="hide"}
+air2 = drop_na(air)
+head(air2)
+```
+
+Six variables still comprise the air2 data frame, but 42 rows were removed, leaving us with only 111.  
+```{r}
+ggpairs(air2)
+```
+
+```{r}
+ggcorr(air2, label=TRUE)
+```
+
+Temp and Ozone are highly correlated, while day is basically not correlated at all with Ozone.  
+```{r}
+ggplot(air2, aes(Temp, Ozone)) +
+  geom_point()
+```
+
+As temperature rises, ozone levels appear to rise as well! The two appear to be correlated based on this plot.  
+```{r}
+model1 = lm(Ozone ~ Temp, air2)
+summary(model1)
+
+confint(model1)
+```
+
+The p-value for this model appears significant, and the R-squared value is close to 0.5 indicating that the two are fairly strongly correlated. The slope for this model likely falls between 1.96 and 2.91.  
+```{r}
+ggplot(air2, aes(Temp, Ozone)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE, color = "red")
+```
+
+```{r}
+testdata = data.frame(Temp = 80)
+predict(model1, newdata = testdata, interval = "predict")
+```
+
+Ozone is predicted to be within -.15 and 95.12, likely near 47.48.  
+
+We can see from our plot earlier that the data seems to have a linear relationship, which supports our first assumption. Also, our residuals should have constant variance. Looking at our plot, we see that, although there are some outliers, the residuals are more or less equidistant from the regression line, supporting assumption #3.  
+```{r}
+dwtest(model1)
+qqPlot(model1)
+```
+
+Our p-value from the Durbin-Watson test is .2123, which is not significant. This suggests that the residuals for our data are independent. In our qqPlot analys, we see that the data is closely aligned with the regression line, though not perfectly. Still, there is decent evidence to support the linear regression model we have created.  
+
+Our model certainly isn't perfect, but it seems to be on the right track for predicting ozone levels based on temperature. However, caution should be used as the fluctuations for ozone appear to swing wildly, as in our prediction for levels based on a temperature of 80. Other resources should be utilized to confirm predictive results.
